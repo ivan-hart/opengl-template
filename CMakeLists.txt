@@ -25,7 +25,6 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 # Link libraries
 target_link_libraries(${PROJECT_NAME} PRIVATE
     ${SDL2_LIBRARIES}
-    SDL2_image
     ${OPENGL_LIBRARIES}
     ${GLM_LIBRARIES}
 )
