@@ -1,4 +1,4 @@
-# A simple OpenGL c++ template using GLAD and SDL2
+# A simple OpenGL C++ template using GLAD and SDL2
 
 ![alt text](https://github.com/ivan-hart/opengl-template/blob/master/repo_image.png)
 
