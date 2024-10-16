@@ -16,3 +16,15 @@
 > $ cmake .. <br></br>
 > $ make <br></br>
 > $ ./opengl-template <br></br>
+
+### Camera Controls
+> W to raise the Y position of the camera<br></br>
+> S to lower the Y position of the camera<br></br>
+> A to rotate the camera to the left <br></br>
+> D to rotate the camera to the right<br></br>
+
+### Cube Controls
+> Up Arrow to rotate the X rotation of the cube up<br></br>
+> Down Arrow to rotate the X rotation of the cube down<br></br>
+> Left Arrow to rotate the cube to the left <br></br>
+> Right Arrow to rotate the cube to the right<br></br>
