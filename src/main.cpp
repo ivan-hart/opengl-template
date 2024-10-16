@@ -6,7 +6,7 @@
 #include <iostream>
 #include <vector>
 
-int main(int _argc, char **_argv)
+int main()
 {
     if (SDL_Init(SDL_INIT_EVERYTHING) < 0)
     {
@@ -151,13 +151,62 @@ int main(int _argc, char **_argv)
     }
     )";
 
-    GLuint VAO, VBO;
-    glGenVertexArrays(1, &VAO);
-    glGenBuffers(1, &VBO);
+    std::vector<GLfloat> gridVertices = {
+        -50.0f, 0.0f, -50.0f,
+        50.0f, 0.0f, -50.0f,
+        50.0f, 0.0f, 50.0f,
+        -50.0f, 0.0f, 50.0f};
 
-    glBindVertexArray(VAO);
+    const char *gridVertexShaderSource = R"(
+    #version 460 core
 
-    glBindBuffer(GL_ARRAY_BUFFER, VBO);
+    layout (location = 0) in vec3 aPos;
+
+    uniform mat4 projection;
+    uniform mat4 view;
+    uniform mat4 model;
+
+    out vec3 worldPos;
+
+    void main() {
+        vec4 worldPosition = model * vec4(aPos, 1.0);
+        worldPos = worldPosition.xyz;
+        gl_Position = projection * view * worldPosition;
+    }
+    )";
+
+    const char *gridFragmentShaderSource = R"(
+    #version 460 core
+
+    in vec3 worldPos;
+
+    out vec4 FragColor;
+
+    uniform vec3 gridColor = vec3(0.8, 0.8, 0.8);
+    uniform float gridSize = 1.0; // 1 meter grid size
+    uniform float lineWidth = 0.02; // Width of the grid lines
+
+    void main() {
+        vec2 coord = worldPos.xz; // Use xz plane for the grid
+        vec2 grid = abs(fract(coord / gridSize - 0.5) - 0.5) / fwidth(coord);
+        float line = min(grid.x, grid.y);
+
+        float alpha = 1.0 - min(line, 1.0);
+
+        // Make the lines more pronounced
+        alpha = smoothstep(0.0, lineWidth, alpha);
+
+        FragColor = vec4(gridColor, alpha);
+    }
+    )";
+
+    GLuint cubeVao, cubeVbo;
+    glGenVertexArrays(1, &cubeVao);
+    glGenBuffers(1, &cubeVbo);
+
+    glBindVertexArray(cubeVao);
+
+    glBindBuffer(GL_ARRAY_BUFFER, cubeVbo);
     glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(GLfloat), vertices.data(), GL_STATIC_DRAW);
 
     // position attribute
@@ -167,6 +216,7 @@ int main(int _argc, char **_argv)
     glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void *)(3 * sizeof(float)));
     glEnableVertexAttribArray(1);
 
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindVertexArray(0);
 
     GLuint vertexShader, fragmentShader, shaderProgram;
@@ -186,19 +236,50 @@ int main(int _argc, char **_argv)
     glDeleteShader(vertexShader);
     glDeleteShader(fragmentShader);
 
+    GLuint gridVao, gridVbo;
+    glGenVertexArrays(1, &gridVao);
+    glGenBuffers(1, &gridVbo);
+
+    glBindVertexArray(gridVao);
+    glBindBuffer(GL_ARRAY_BUFFER, gridVbo);
+    glBufferData(GL_ARRAY_BUFFER, gridVertices.size() * sizeof(GLfloat), gridVertices.data(), GL_STATIC_DRAW);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(GLfloat), (void *)0);
+    glEnableVertexAttribArray(0);
+
+    // Compile and link shaders for the grid
+    GLuint gridVertexShader, gridFragmentShader, gridShaderProgram;
+    gridVertexShader = glCreateShader(GL_VERTEX_SHADER);
+    glShaderSource(gridVertexShader, 1, &gridVertexShaderSource, NULL);
+    glCompileShader(gridVertexShader);
+
+    gridFragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
+    glShaderSource(gridFragmentShader, 1, &gridFragmentShaderSource, NULL);
+    glCompileShader(gridFragmentShader);
+
+    gridShaderProgram = glCreateProgram();
+    glAttachShader(gridShaderProgram, gridVertexShader);
+    glAttachShader(gridShaderProgram, gridFragmentShader);
+    glLinkProgram(gridShaderProgram);
+
+    glDeleteShader(gridVertexShader);
+    glDeleteShader(gridFragmentShader);
+
     glUseProgram(0);
 
     glViewport(0, 0, 1280, 720);
     glEnable(GL_DEPTH_TEST);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glClearColor(0.2f, 0.4f, 0.8f, 1.0f);
 
     glm::mat4 projection = glm::perspective(glm::radians(60.0f), 1280.0f / 720.0f, 0.001f, 1000.0f);
-    glm::mat4 model = glm::mat4(1.0f);
+    glm::mat4 cubeModel = glm::mat4(1.0f);
+    glm::mat4 gridModel = glm::mat4(1.0f);
 
     glm::vec3 lightPos(1.2f, 1.0f, 2.0f);
 
     float radius = 5.0f;
-    float camX, camZ;
+    float camX, camZ, camY;
 
     bool running = true;
     float dt = 0.0f, angle = 0.0f;
@@ -219,48 +300,105 @@ int main(int _argc, char **_argv)
         dt = (float)(NOW - LAST) / SDL_GetPerformanceFrequency();
         LAST = NOW;
 
-        angle += 0.5f * dt;
+        const Uint8 *keystate = SDL_GetKeyboardState(NULL);
+
+        if (keystate[SDL_SCANCODE_A])
+        {
+            angle -= 0.5f * dt;
+        }
+        if (keystate[SDL_SCANCODE_D])
+        {
+            angle += 0.5f * dt;
+        }
+        if(keystate[SDL_SCANCODE_W]) 
+        {
+            camY += 0.5f * dt;
+        }
+        if(keystate[SDL_SCANCODE_S]) 
+        {
+            camY -= 0.5f * dt;
+        }
+
+        if (keystate[SDL_SCANCODE_LEFT])
+        {
+            cubeModel = glm::rotate(cubeModel, glm::radians(10.0f) * dt, glm::vec3(0.0f, 1.0f, 0.0f));
+        }
+        if (keystate[SDL_SCANCODE_RIGHT])
+        {
+            cubeModel = glm::rotate(cubeModel, glm::radians(10.0f) * dt, glm::vec3(0.0f, -1.0f, 0.0f));
+        }
+        if(keystate[SDL_SCANCODE_UP]) 
+        {
+            cubeModel = glm::rotate(cubeModel, glm::radians(10.0f) * dt, glm::vec3(1.0f, 0.0f, 0.0f));
+        }
+        if(keystate[SDL_SCANCODE_DOWN]) 
+        {
+            cubeModel = glm::rotate(cubeModel, glm::radians(10.0f) * dt, glm::vec3(-1.0f, 0.0f, 0.0f));
+        }
 
         camX = sin(angle) * radius;
         camZ = cos(angle) * radius;
 
-        glm::mat4 view = glm::lookAt(glm::vec3(camX, 1.0f, camZ), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+        glm::mat4 view = glm::lookAt(glm::vec3(camX, camY, camZ), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
 
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        glUseProgram(shaderProgram);
+        if (shaderProgram != -1)
+        {
+            glUseProgram(shaderProgram);
 
-        GLuint projectionLoc = glGetUniformLocation(shaderProgram, "projection");
-        GLuint viewLoc = glGetUniformLocation(shaderProgram, "view");
-        GLuint modelLoc = glGetUniformLocation(shaderProgram, "model");
+            GLuint projectionLoc = glGetUniformLocation(shaderProgram, "projection");
+            GLuint viewLoc = glGetUniformLocation(shaderProgram, "view");
+            GLuint modelLoc = glGetUniformLocation(shaderProgram, "model");
 
-        if (projectionLoc != -1)
-            glUniformMatrix4fv(projectionLoc, 1, GL_FALSE, glm::value_ptr(projection));
+            if (projectionLoc != -1)
+                glUniformMatrix4fv(projectionLoc, 1, GL_FALSE, glm::value_ptr(projection));
 
-        if (viewLoc != -1)
-            glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(view));
+            if (viewLoc != -1)
+                glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(view));
 
-        if (modelLoc != -1)
-            glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
+            if (modelLoc != -1)
+                glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(cubeModel));
 
-        GLuint lightPosLoc = glGetUniformLocation(shaderProgram, "lightPos");
-        GLuint viewPosLoc = glGetUniformLocation(shaderProgram, "viewPos");
-        GLuint lightColorLoc = glGetUniformLocation(shaderProgram, "lightColor");
-        GLuint objectColorLoc = glGetUniformLocation(shaderProgram, "objectColor");
+            GLuint lightPosLoc = glGetUniformLocation(shaderProgram, "lightPos");
+            GLuint viewPosLoc = glGetUniformLocation(shaderProgram, "viewPos");
+            GLuint lightColorLoc = glGetUniformLocation(shaderProgram, "lightColor");
+            GLuint objectColorLoc = glGetUniformLocation(shaderProgram, "objectColor");
 
-        glUniform3f(lightPosLoc, lightPos.x, lightPos.y, lightPos.z);
-        glUniform3f(viewPosLoc, camX, 1.0f, camZ);
-        glUniform3f(lightColorLoc, 1.0f, 1.0f, 1.0f);
-        glUniform3f(objectColorLoc, 1.0f, 0.5f, 0.31f);
+            glUniform3f(lightPosLoc, lightPos.x, lightPos.y, lightPos.z);
+            glUniform3f(viewPosLoc, camX, 1.0f, camZ);
+            glUniform3f(lightColorLoc, 1.0f, 1.0f, 1.0f);
+            glUniform3f(objectColorLoc, 1.0f, 0.5f, 0.31f);
+        }
 
-        glBindVertexArray(VAO);
+        glBindVertexArray(cubeVao);
         glDrawArrays(GL_TRIANGLES, 0, 36);
+
+        glUseProgram(gridShaderProgram);
+
+        GLuint projectionLoc = glGetUniformLocation(gridShaderProgram, "projection");
+        GLuint viewLoc = glGetUniformLocation(gridShaderProgram, "view");
+        GLuint modelLoc = glGetUniformLocation(gridShaderProgram, "model");
+        GLuint gridColorLoc = glGetUniformLocation(gridShaderProgram, "gridColor");
+        GLuint gridSizeLoc = glGetUniformLocation(gridShaderProgram, "gridSize");
+        GLuint lineWidthLoc = glGetUniformLocation(gridShaderProgram, "lineWidth");
+
+        glUniformMatrix4fv(projectionLoc, 1, GL_FALSE, glm::value_ptr(projection));
+        glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(view));
+        glm::mat4 m = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, -0.5f, 0.0f));
+        glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(m)); // Identity matrix for the grid
+        glUniform3f(gridColorLoc, 0.8f, 0.8f, 0.8f);
+        glUniform1f(gridSizeLoc, 1.0f);
+        glUniform1f(lineWidthLoc, 0.02f);
+
+        glBindVertexArray(gridVao);
+        glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
 
         SDL_GL_SwapWindow(window);
     }
 
-    glDeleteVertexArrays(1, &VAO);
-    glDeleteBuffers(1, &VBO);
+    glDeleteVertexArrays(1, &cubeVao);
+    glDeleteBuffers(1, &cubeVbo);
     glDeleteProgram(shaderProgram);
 
     SDL_GL_DeleteContext(glContext);
