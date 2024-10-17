@@ -5,9 +5,7 @@
 ### Dependencies
 > [SDL2](https://github.com/libsdl-org/SDL) <br></br>
 > [GLM](https://github.com/g-truc/glm) <br></br>
-> [GLAD (Included)](https://glad.dav1d.de/) <br></br>
-
-### Recomended Tools
+> [GLAD (Included)](https://github.com/Dav1dde/glad) <br></br>
 > [Cmake (Makefile Generator)](https://cmake.org/) <br></br>
 > [GNU Make](https://www.gnu.org/software/make/) <br></br>
 
