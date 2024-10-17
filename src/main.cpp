@@ -1,4 +1,4 @@
-#include <glad/glad.h>
+#include <glad/gl.h>
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_opengl.h>
 #include <glm/ext.hpp>
@@ -42,9 +42,10 @@ int main()
     }
     SDL_GL_MakeCurrent(window, glContext);
 
-    if (!gladLoadGLLoader((GLADloadproc)SDL_GL_GetProcAddress))
+    int version = gladLoadGL((GLADloadfunc)SDL_GL_GetProcAddress);
+    if(version == 0)
     {
-        std::cerr << "Error initalizing GLAD: " << glGetError() << std::endl;
+        std::cerr << "Failed to load OpenGL: " << glGetError() << std::endl;
         SDL_GL_DeleteContext(glContext);
         SDL_DestroyWindow(window);
         SDL_Quit();
